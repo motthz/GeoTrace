@@ -34,7 +34,9 @@ Desktop archives reside in `%LOCALAPPDATA%/GeoTrace/archive.sqlite`. CLI default
 
 ## Verified live behavior
 
-Samolaco, 31 October 2026 01:00–02:00 Europe/Rome, 1 km: three satellite catalogs returned no results in their queried subsets. Commons returned HTTP 403 from this environment, recorded as UNAVAILABLE, not zero matches. This establishes no conclusion about an incident or the existence of other footage.
+Version 0.1.1: 14 local automated tests passed, including Qt Start Search, persistence/reopen, changed-location resolution and Commons busy-status handling. A real search through the Qt event loop retrieved 88 records: 38 satellite catalog records and 50 nearby Commons candidates. Commons recording dates remain unknown and are not confirmed within the requested historical interval. The updated portable executable passed a four-second startup smoke check on the development Windows 11 host. Download the incremental Windows prerelease at https://github.com/motthz/GeoTrace/releases/tag/v0.1.1 .
+
+Earlier 0.1.0 test: Samolaco, 31 October 2026 01:00–02:00 Europe/Rome, 1 km: three satellite catalogs returned no results in their queried subsets. Commons returned HTTP 403 from this environment, recorded as UNAVAILABLE, not zero matches. In 0.1.1 the application User-Agent includes the project URL and Commons access succeeded in the real UI test after an earlier provider-side busy response. This establishes no conclusion about an incident or the existence of other footage.
 
 Separate integration query, Samolaco, June 2024, 10 km: Copernicus returned 6 records, NASA 7, Earth Search 25 (first-page cap). These are catalog records, not downloaded or independently verified images. Actual raw responses and exported reports remain under ignored `private/`, strictly separate from mocked unit tests.
 

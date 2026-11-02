@@ -84,3 +84,11 @@ def test_cancellation_checkpoint(tmp_path,monkeypatch):
         with pytest.raises(asyncio.CancelledError): await task
     asyncio.run(run())
     assert a.load(id)['coverage']['slow']['status']=='ERROR'
+
+def test_commons_busy_is_not_no_results(tmp_path,monkeypatch):
+    import geotrace.providers as providers
+    async def busy(*args,**kwargs): return {'error':{'code':'cirrussearch-too-busy-error','info':'Temporarily busy'}}
+    monkeypatch.setattr(providers,'request',busy)
+    monkeypatch.setattr(providers,'PROVIDERS',[Commons(Capabilities('Commons','https://example.com',media=('image',)))])
+    a=Archive(tmp_path/'db'); id=asyncio.run(search(a,Query()))
+    assert a.load(id)['coverage']['Commons']['status']=='RATE_LIMITED'

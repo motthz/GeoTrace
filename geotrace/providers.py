@@ -4,7 +4,9 @@ import dataclasses
 import httpx
 from .core import Record, distance
 
-USER_AGENT = 'GeoTrace/0.1 (local desktop research; public metadata discovery)'
+USER_AGENT = 'GeoTrace/0.2 (https://github.com/motthz/GeoTrace)'
+
+class ProviderBusy(RuntimeError): pass
 
 @dataclasses.dataclass(frozen=True)
 class Capabilities:
@@ -42,7 +44,10 @@ class Stac(Provider):
 class Commons(Provider):
     async def search(self,client,q,request):
         data=await request(client,'GET',self.cap.endpoint,params=dict(action='query',format='json',generator='geosearch',ggscoord=f'{q.lat}|{q.lon}',ggsradius=min(q.radius,10000),ggsnamespace=6,ggslimit=50,prop='imageinfo|coordinates',iiprop='url|timestamp|extmetadata',iiurlwidth=240))
-        if 'error' in data: raise RuntimeError(str(data['error']))
+        if 'error' in data:
+            if data['error'].get('code') in ('cirrussearch-too-busy-error','maxlag','ratelimited'):
+                raise ProviderBusy(data['error'].get('info','Provider is busy; try again later'))
+            raise RuntimeError(str(data['error']))
         out=[]
         for p in data.get('query',{}).get('pages',{}).values():
             ii=p.get('imageinfo',[{}])[0]; meta=ii.get('extmetadata',{}); coords=p.get('coordinates',[{}])[0]
@@ -116,7 +121,7 @@ async def search(archive,q,callback=lambda *args:None, selected=None, investigat
                 archive.status(id,name,status='ERROR',reason='Cancelled; saved records retained',capabilities=cap); raise
             except Exception as exc:
                 code=exc.response.status_code if isinstance(exc,httpx.HTTPStatusError) else None
-                status='RATE_LIMITED' if code==429 else 'AUTH_REQUIRED' if code==401 else 'UNAVAILABLE' if code==403 or isinstance(exc,httpx.TransportError) else 'ERROR'
+                status='RATE_LIMITED' if code==429 or isinstance(exc,ProviderBusy) else 'AUTH_REQUIRED' if code==401 else 'UNAVAILABLE' if code==403 or isinstance(exc,httpx.TransportError) else 'ERROR'
                 archive.status(id,name,status=status,reason=str(exc),capabilities=cap); callback(name,status,0)
         await asyncio.gather(*(run(p) for p in PROVIDERS))
     return id

@@ -1,6 +1,6 @@
 # GeoTrace developer handoff
 
-Python 3.11+ / PySide6 desktop, CPU only. No existing repository was supplied. Do not fabricate search results or conflate upload and recording times.
+Python 3.11+ / PySide6 desktop, CPU only. No existing repository was supplied. Current operational directory: Desktop/GeoTrace. The earlier Nuova cartella directory is retained because the editor holds it open. Do not fabricate search results or conflate upload and recording times.
 
 Architecture: `core.py` validated query/record dataclasses, spatial/time helpers, schema-v1 SQLite persistence; `providers.py` capabilities, public adapters and asynchronous coordinator; `app.py` Qt main thread with worker-owned asyncio loop; `reports.py` export; `media.py` optional local hashes and guarded downloads; `cli.py` headless retrieval.
 

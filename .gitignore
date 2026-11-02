@@ -7,3 +7,8 @@ dist/
 build/
 *.sqlite*
 *.spec
+REQUIREMENTS.md
+VALIDATION.md
+.env
+.env.*
+*.log

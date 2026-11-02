@@ -3,14 +3,15 @@ import json
 import os
 import sys
 import html
-from datetime import datetime
+from datetime import datetime, timedelta
+import time
 from zoneinfo import ZoneInfo
 from urllib.parse import urlencode
 from pathlib import Path
-from PySide6.QtCore import QThread, Signal, Qt
+from PySide6.QtCore import QThread, Signal, Qt, QTimer
 from PySide6.QtGui import QDesktopServices, QColor, QPen, QFont, QFontDatabase
 from PySide6.QtCore import QUrl
-from PySide6.QtWidgets import (QApplication,QMainWindow,QWidget,QVBoxLayout,QHBoxLayout,QFormLayout,QLineEdit,QComboBox,QSpinBox,QPushButton,QTableWidget,QTableWidgetItem,QTabWidget,QTextBrowser,QFileDialog,QMessageBox,QGraphicsView,QGraphicsScene,QSplitter)
+from PySide6.QtWidgets import (QApplication,QMainWindow,QWidget,QVBoxLayout,QHBoxLayout,QFormLayout,QLineEdit,QComboBox,QSpinBox,QPushButton,QTableWidget,QTableWidgetItem,QTabWidget,QTextBrowser,QFileDialog,QMessageBox,QGraphicsView,QGraphicsScene,QSplitter,QCheckBox,QLabel)
 from .core import Archive,Query
 from .providers import search,PROVIDERS,geocode
 from .reports import export,LIMITATIONS
@@ -40,9 +41,9 @@ class Worker(QThread):
 class GeoWorker(QThread):
     done=Signal(object)
     failure=Signal(str)
-    def __init__(self,text): super().__init__(); self.text=text
+    def __init__(self,text,reverse=False): super().__init__(); self.text=text; self.reverse=reverse
     def run(self):
-        try: self.done.emit(asyncio.run(geocode(self.text)))
+        try: self.done.emit(asyncio.run(geocode(self.text,self.reverse)))
         except Exception as e: self.failure.emit(str(e))
 
 class MapView(QGraphicsView):
@@ -64,15 +65,30 @@ class Window(QMainWindow):
         self.setWindowTitle('GeoTrace — public media discovery'); self.resize(1450,900)
         self.archive=Archive(data_dir()/'archive.sqlite'); self.worker=None; self.current=None; self.records=[]
         self.resolved_location='Samolaco railway station, Italy'; self.pending_search=False
+        self.resolved_coords=('46.24645','9.42375'); self.geo_snapshot=None; self.geo_next=0; self.applying_fields=False
+        self.date_snapshot=('2026-10-31T01:00:00','2026-10-31T02:00:00')
         root=QWidget(); self.setCentralWidget(root); layout=QVBoxLayout(root)
         form=QFormLayout(); self.inputs={}
         defaults={'location':'Samolaco railway station, Italy','lat':'46.24645','lon':'9.42375','start':'2026-10-31T01:00:00','end':'2026-10-31T02:00:00','zone':'Europe/Rome','keywords':''}
         for key,value in defaults.items():
             edit=QLineEdit(value); self.inputs[key]=edit; form.addRow(key,edit)
+        self.auto_zone=QCheckBox('Fuso orario automatico dalle coordinate'); self.auto_zone.setChecked(True)
+        self.inputs['zone'].setReadOnly(True); self.auto_zone.toggled.connect(self.zone_mode); form.addRow(self.auto_zone)
+        self.field_status=QLabel('Luogo e coordinate sincronizzati. Le date indicano ora locale.'); self.field_status.setWordWrap(True); form.addRow(self.field_status)
+        self.inputs['location'].editingFinished.connect(self.auto_location)
+        for key in ('lat','lon'): self.inputs[key].editingFinished.connect(self.auto_coordinates)
+        for key in ('start','end'): self.inputs[key].editingFinished.connect(lambda key=key:self.normalize_dates(key))
         self.radius=QSpinBox(); self.radius.setRange(50,100000); self.radius.setValue(1000); form.addRow('Radius (m)',self.radius)
         self.mode=QComboBox(); self.mode.addItems(['QUICK','DEEP','EXTENDED']); form.addRow('Depth (bounded catalog limits)',self.mode)
         self.sources=QLineEdit(', '.join(p.cap.name for p in PROVIDERS)); form.addRow('Sources (comma separated)',self.sources)
         self.media=QLineEdit('image, video, satellite, article'); form.addRow('Media types',self.media)
+        self.sources.setReadOnly(True); self.media.setReadOnly(True)
+        self.source_checks={}; self.media_checks={}
+        for names,target,label in [([p.cap.name for p in PROVIDERS],self.source_checks,'Fonti'),(['image','video','satellite','article'],self.media_checks,'Media')]:
+            box=QWidget(); row=QVBoxLayout(box); row.setContentsMargins(0,0,0,0)
+            for name in names:
+                check=QCheckBox(name); check.setChecked(True); target[name]=check; row.addWidget(check); check.toggled.connect(self.sync_choices)
+            form.addRow(label,box)
         controls=QWidget(); controls.setLayout(form)
         controls.setMinimumWidth(430)
         self.tabs=QTabWidget(); split=QSplitter(); split.addWidget(controls); split.addWidget(self.tabs); split.setStretchFactor(1,3); split.setSizes([450,1000]); layout.addWidget(split)
@@ -93,20 +109,103 @@ class Window(QMainWindow):
         self.statusBar().showMessage('Ready. '+LIMITATIONS)
     def locate_place(self):
         if hasattr(self,'geo') and self.geo.isRunning(): return
-        self.locate.setEnabled(False); self.geo=GeoWorker(self.inputs['location'].text())
-        self.geo.done.connect(self.located); self.geo.failure.connect(self.error)
-        # One request at a time, plus one second cooldown; no autocomplete calls.
-        from PySide6.QtCore import QTimer
+        if time.monotonic()<self.geo_next:
+            QTimer.singleShot(int((self.geo_next-time.monotonic())*1000)+10,self.locate_place); return
+        reverse=self.coords()!=self.resolved_coords and self.inputs['location'].text().strip()==self.resolved_location
+        self.geo_snapshot=(self.inputs['location'].text().strip(),self.coords(),reverse)
+        text=','.join(self.coords()) if reverse else self.geo_snapshot[0]
+        self.locate.setEnabled(False); self.geo=GeoWorker(text,reverse)
+        self.geo.done.connect(self.located); self.geo.failure.connect(self.geo_error)
+        self.geo_next=time.monotonic()+1.1
         self.geo.finished.connect(lambda:QTimer.singleShot(1100,lambda:self.locate.setEnabled(True)))
         self.geo.start()
+    def coords(self): return tuple(self.inputs[k].text().strip().replace(',','.') for k in ('lat','lon'))
+    def sync_choices(self):
+        self.sources.setText(', '.join(n for n,c in self.source_checks.items() if c.isChecked()))
+        self.media.setText(', '.join(n for n,c in self.media_checks.items() if c.isChecked()))
+    def zone_mode(self,automatic):
+        self.inputs['zone'].setReadOnly(automatic)
+        if automatic: self.fill_zone()
+    def fill_zone(self):
+        if not self.auto_zone.isChecked(): return
+        from tzfpy import get_tzs
+        try:
+            lat,lon=map(float,self.coords()); zones=get_tzs(lon,lat)
+            zone=zones[0] if len(zones)==1 else ''
+            if zone: ZoneInfo(zone)
+            self.inputs['zone'].setText(zone)
+            if not zone: self.field_status.setText('Fuso incerto o confine: disattiva il fuso automatico e seleziona una zona IANA.')
+        except (ValueError,KeyError): self.inputs['zone'].clear()
+    def auto_location(self):
+        if not self.applying_fields and self.inputs['location'].text().strip()!=self.resolved_location:
+            self.field_status.setText('Risoluzione del luogo in corso…'); self.locate_place()
+    def auto_coordinates(self):
+        if self.applying_fields or self.coords()==self.resolved_coords: return
+        try:
+            lat,lon=map(float,self.coords())
+            if not (-90<=lat<=90 and -180<=lon<=180): raise ValueError()
+        except ValueError:
+            self.pending_search=False; self.start.setEnabled(True)
+            self.field_status.setText('Coordinate non valide: latitudine -90…90, longitudine -180…180.'); return
+        # Explicit coordinates are authoritative; never snap them to a nearby place centroid.
+        self.inputs['lat'].setText(str(lat)); self.inputs['lon'].setText(str(lon))
+        self.resolved_location=f'{lat}, {lon}'; self.inputs['location'].setText(self.resolved_location)
+        self.fill_zone(); self.field_status.setText('Coordinate aggiornate; recupero del nome del luogo…'); self.locate_place()
+    @staticmethod
+    def parse_date(text):
+        text=text.strip()
+        try: return datetime.fromisoformat(text.replace('Z','+00:00'))
+        except ValueError:
+            for fmt in ('%d/%m/%Y %H:%M:%S','%d/%m/%Y %H:%M','%d/%m/%Y'):
+                try:return datetime.strptime(text,fmt)
+                except ValueError:pass
+            raise ValueError('Data non valida: usa AAAA-MM-GG HH:MM oppure GG/MM/AAAA HH:MM.')
+    def normalize_dates(self,changed):
+        try:
+            start=self.parse_date(self.inputs['start'].text()); end=self.parse_date(self.inputs['end'].text())
+            if changed=='start' and start.isoformat()!=self.date_snapshot[0]:
+                previous_start,previous_end=map(datetime.fromisoformat,self.date_snapshot)
+                duration=previous_end-previous_start
+                if duration.total_seconds()<=0: duration=timedelta(hours=1)
+                end=start+duration
+                self.field_status.setText('Fine aggiornata automaticamente mantenendo la durata precedente.')
+            if start.tzinfo or end.tzinfo:
+                raise ValueError('Inserisci le ore locali senza offset; il campo fuso orario gestisce la conversione UTC.')
+            if end<=start: raise ValueError('La fine deve essere successiva all’inizio.')
+            self.inputs['start'].setText(start.isoformat(timespec='seconds')); self.inputs['end'].setText(end.isoformat(timespec='seconds'))
+            self.date_snapshot=(self.inputs['start'].text(),self.inputs['end'].text())
+            return True
+        except (ValueError,TypeError) as exc:
+            self.field_status.setText(str(exc)); return False
+    def geo_error(self,text):
+        if self.geo_snapshot and self.geo_snapshot[2] and self.coords()==self.geo_snapshot[1]:
+            self.resolved_coords=self.coords(); self.fill_zone()
+            self.field_status.setText('Nome del luogo non disponibile: uso delle coordinate esatte.')
+            pending=self.pending_search; self.pending_search=False
+            if pending: QTimer.singleShot(0,self.begin)
+        else:self.error(text)
     def located(self,places):
         from PySide6.QtWidgets import QInputDialog
+        if self.geo_snapshot:
+            label,coords,reverse=self.geo_snapshot
+            if self.inputs['location'].text().strip()!=label or self.coords()!=coords:
+                self.pending_search=False; self.start.setEnabled(True)
+                self.field_status.setText('Campi modificati durante la richiesta. Sincronizza i nuovi valori prima di cercare.'); return
+            if reverse:
+                if places.get('display_name'):
+                    self.inputs['location'].setText(places['display_name']); self.resolved_location=places['display_name']
+                self.resolved_coords=self.coords(); self.fill_zone()
+                self.field_status.setText('Coordinate esatte, nome del luogo e fuso sincronizzati.')
+                pending=self.pending_search; self.pending_search=False; self.start.setEnabled(True)
+                if pending: QTimer.singleShot(0,self.begin)
+                return
         if not places: self.pending_search=False; self.start.setEnabled(True); self.error('No matching location. Enter coordinates or try a more precise location.'); return
         names=[p['display_name'] for p in places]
-        name,ok=QInputDialog.getItem(self,'OpenStreetMap / Nominatim','Choose location',names,0,False)
+        name,ok=(names[0],True) if len(names)==1 else QInputDialog.getItem(self,'OpenStreetMap / Nominatim','Choose location',names,0,False)
         if ok:
             p=places[names.index(name)]; self.inputs['lat'].setText(p['lat']); self.inputs['lon'].setText(p['lon']); self.inputs['location'].setText(name)
             self.resolved_location=name
+            self.resolved_coords=self.coords(); self.fill_zone(); self.field_status.setText('Luogo, coordinate e fuso sincronizzati.')
         pending=self.pending_search; self.pending_search=False; self.start.setEnabled(True)
         if ok and pending: self.begin()
     def select_record(self,id):
@@ -114,12 +213,21 @@ class Window(QMainWindow):
             if r['id']==id: self.table.selectRow(index); self.show_details(); self.tabs.setCurrentWidget(self.details); break
     def begin(self):
         if self.worker and self.worker.isRunning(): return
+        if not self.normalize_dates('end'): return
+        if hasattr(self,'geo') and self.geo.isRunning():
+            self.pending_search=True; self.start.setEnabled(False); return
+        if self.coords()!=self.resolved_coords and self.inputs['location'].text().strip()==self.resolved_location:
+            self.pending_search=True; self.start.setEnabled(False); self.auto_coordinates(); return
         if self.inputs['location'].text().strip()!=self.resolved_location:
             self.pending_search=True; self.start.setEnabled(False); self.locate_place(); return
         try:
+            self.fill_zone(); self.sync_choices()
             values={k:v.text() for k,v in self.inputs.items()}; values['lat']=float(values['lat']); values['lon']=float(values['lon'])
             q=Query(**values,radius=self.radius.value(),mode=self.mode.currentText(),media=tuple(x.strip() for x in self.media.text().split(',')))
             selected=[x.strip() for x in self.sources.text().split(',')]
+            if not any(c.isChecked() for c in self.source_checks.values()): raise ValueError('Seleziona almeno una fonte.')
+            if not any(c.isChecked() for c in self.media_checks.values()): raise ValueError('Seleziona almeno un tipo di media.')
+            if not any(p.cap.name in selected and set(q.media).intersection(p.cap.media) for p in PROVIDERS): raise ValueError('Le fonti selezionate non supportano i tipi di media scelti.')
             unknown=set(selected)-{p.cap.name for p in PROVIDERS}
             if unknown: raise ValueError('Unknown active connectors: '+', '.join(unknown))
             self.worker=Worker(self.archive,q,selected); self.worker.progress.connect(self.progress); self.worker.done.connect(self.finished); self.worker.failure.connect(self.error)

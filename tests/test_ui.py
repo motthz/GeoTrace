@@ -46,3 +46,53 @@ def test_changed_location_resolves_before_search(tmp_path,monkeypatch):
     assert called and w.pending_search
     assert w.worker is None
     w.close()
+
+def make_window(tmp_path,monkeypatch):
+    monkeypatch.setenv('LOCALAPPDATA',str(tmp_path))
+    app=QApplication.instance() or QApplication([])
+    return app,Window()
+
+def test_coordinates_fill_label_and_zone_without_moving_point(tmp_path,monkeypatch):
+    app,w=make_window(tmp_path,monkeypatch)
+    monkeypatch.setattr(w,'locate_place',lambda:None)
+    w.inputs['lat'].setText('40,7128'); w.inputs['lon'].setText('-74.006'); w.auto_coordinates()
+    assert w.coords()==('40.7128','-74.006')
+    assert w.inputs['zone'].text()=='America/New_York'
+    assert w.inputs['location'].text()=='40.7128, -74.006'
+    w.geo_snapshot=(w.resolved_location,w.coords(),True)
+    w.located({'display_name':'New York'})
+    assert w.inputs['location'].text()=='New York'
+    assert w.coords()==('40.7128','-74.006')
+    assert w.resolved_coords==w.coords()
+    w.close()
+
+def test_stale_lookup_cannot_overwrite_new_coordinates(tmp_path,monkeypatch):
+    app,w=make_window(tmp_path,monkeypatch)
+    w.geo_snapshot=(w.resolved_location,w.coords(),False)
+    w.inputs['lat'].setText('41.9')
+    w.located([{'lat':'48.8','lon':'2.3','display_name':'Paris'}])
+    assert w.inputs['lat'].text()=='41.9'
+    assert w.resolved_location=='Samolaco railway station, Italy'
+    w.close()
+
+def test_dates_normalize_and_preserve_duration(tmp_path,monkeypatch):
+    app,w=make_window(tmp_path,monkeypatch)
+    w.inputs['start'].setText('05/11/2026 23:30'); assert w.normalize_dates('start')
+    assert w.inputs['start'].text()=='2026-11-05T23:30:00'
+    assert w.inputs['end'].text()=='2026-11-06T00:30:00'
+    w.inputs['end'].setText('05/11/2026 22:30')
+    assert not w.normalize_dates('end')
+    w.close()
+
+def test_manual_timezone_is_preserved(tmp_path,monkeypatch):
+    app,w=make_window(tmp_path,monkeypatch)
+    w.auto_zone.setChecked(False); w.inputs['zone'].setText('UTC'); w.fill_zone()
+    assert w.inputs['zone'].text()=='UTC'
+    assert not w.inputs['zone'].isReadOnly()
+    w.close()
+
+def test_invalid_coordinates_do_not_leave_search_disabled(tmp_path,monkeypatch):
+    app,w=make_window(tmp_path,monkeypatch)
+    w.inputs['lat'].setText('999'); w.begin()
+    assert w.start.isEnabled(); assert w.worker is None
+    w.close()

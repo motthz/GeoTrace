@@ -1,4 +1,6 @@
-# GeoTrace 0.1.2
+# GeoTrace 0.1.3
+
+User-flow audit: 63 automated regression cases, plus real Windows mouse/keyboard automation over all six tabs, live source retrieval, validation errors, archive reopening, native export dialogs, cancellation and process restart. Reproducible scripts and verification limits are described in [AUDIT.md](AUDIT.md). Screenshots, real source records and detailed audit outputs remain in ignored `private/audit/`.
 
 Automatic field synchronization: leaving the location field resolves its coordinates; multiple matching places require selection. Editing coordinates preserves the exact point, resolves its label and detects its IANA timezone offline with tzfpy. A single unambiguous timezone is filled automatically; at boundaries or when unresolved, disable automatic timezone and enter a valid IANA zone. Dates are local times without embedded offsets and accept ISO or `DD/MM/YYYY HH:MM`. Editing the start moves the end by the previous duration; an invalid or reversed end is blocked. Sources and media use checkboxes and incompatible selections are rejected. Geographic responses for earlier field values cannot overwrite newer input. Reverse lookup failure retains the coordinate label and exact point. Timezone boundary data is approximate and may differ for historical jurisdiction changes; manual timezone remains available.
 
@@ -22,7 +24,7 @@ python -m pytest -q
 python -m PyInstaller --noconfirm --windowed --name GeoTrace --collect-data tzdata launch.py
 ```
 
-Desktop archives reside in `%LOCALAPPDATA%/GeoTrace/archive.sqlite`. CLI defaults to `private/archive.sqlite`. No credentials, paid APIs, models or private camera discovery are used.
+Desktop and CLI archives default to `%LOCALAPPDATA%/GeoTrace/archive.sqlite`. Use CLI `--archive private/archive.sqlite` for a separate archive. No credentials, paid APIs, models or private camera discovery are used.
 
 ## Implemented
 
@@ -31,7 +33,7 @@ Desktop archives reside in `%LOCALAPPDATA%/GeoTrace/archive.sqlite`. CLI default
 - Manual Nominatim place lookup with selection and cooldown; reverse lookup available as Python API.
 - SQLite investigation archive, durable provider checkpoints, cancellation, bounded retry/backoff, timeout handling, CLI repeat-and-merge via `--resume ID`.
 - Searchable results table, original record inspector, offline coordinate map centered on the search radius with STAC polygons, zoom/pan and double-click record selection, timezone-converted discrete timestamp timeline and readable coverage matrix.
-- JSON, CSV, HTML and PDF exports preserving raw metadata, provenance, errors and uncertainties. Original source links open on double-click.
+- JSON, CSV, HTML and PDF exports with a SHA-256 manifest, provenance, errors and uncertainties. Lossless raw metadata remains in companion JSON and expandable HTML; PDF is a readable linked summary referencing the JSON hash. Formula-like CSV strings are escaped while originals stay in JSON. Original source links open on double-click.
 - Exact URL/hash grouping helpers, file SHA-256, optional local image perceptual hashing. Permission-gated download helper; current discovery adapters conservatively permit metadata only.
 
 ## Verified live behavior

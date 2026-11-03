@@ -9,5 +9,5 @@
 - Add permission/license review UI and download queue, resume, attribution sidecars and safe transport.
 - Add local model manager and opt-in OCR/transcription/embeddings, video keyframes, near-duplicate grouping.
 - Add formal sequential migrations and FTS, links between independently discovered provenance records.
-- Expand tests: timeout/retry/cancel orchestration, resume, schema migrations, footprint filters and UI search interactions.
+- Expand beyond the audited regression/UI flows: schema migrations, exact footprint filtering, more language/font combinations, corrupt database recovery and power-loss scenarios. See AUDIT.md for the 63 current tests and native Windows evidence.
 - Verify portable executable on clean Windows 10/11, accessibility, dependency notices and redistribution licensing.

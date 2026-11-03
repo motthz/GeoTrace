@@ -5,18 +5,23 @@ import json
 import math
 import sqlite3
 import uuid
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
 from zoneinfo import ZoneInfo
+from contextlib import contextmanager
 
 def now():
     return datetime.now(timezone.utc).isoformat()
 
+def data_dir():
+    return Path(os.getenv('LOCALAPPDATA',str(Path.home()/'.local/share')))/'GeoTrace'
+
 def utc(value: str, zone: str):
+    tz = ZoneInfo(zone)
     dt = datetime.fromisoformat(value.replace('Z', '+00:00'))
     if dt.tzinfo is None:
-        tz = ZoneInfo(zone)
         a, b = dt.replace(tzinfo=tz, fold=0), dt.replace(tzinfo=tz, fold=1)
         if a.utcoffset() != b.utcoffset():
             raise ValueError('Ambiguous or nonexistent local time: supply an explicit UTC offset')
@@ -47,7 +52,9 @@ class Query:
             raise ValueError('Invalid coordinates or radius (50–100000 m)')
         if self.mode not in ('QUICK', 'DEEP', 'EXTENDED'):
             raise ValueError('Invalid search mode')
-        if self.start_utc > self.end_utc:
+        if not self.media or isinstance(self.media,str) or not set(self.media)<= {'image','video','satellite','article'}:
+            raise ValueError('Select valid media types')
+        if datetime.fromisoformat(self.start_utc) >= datetime.fromisoformat(self.end_utc):
             raise ValueError('Start must precede end')
 
     @property
@@ -105,12 +112,19 @@ class Archive:
         self.path = str(path)
         Path(path).parent.mkdir(parents=True, exist_ok=True)
         with self.connect() as c:
+            if c.execute('PRAGMA user_version').fetchone()[0]>1:
+                raise ValueError('Archive schema is newer than this application; update GeoTrace before opening it')
             c.executescript('''PRAGMA journal_mode=WAL;
             CREATE TABLE IF NOT EXISTS investigations(id TEXT PRIMARY KEY, query TEXT, created TEXT);
             CREATE TABLE IF NOT EXISTS records(investigation TEXT, id TEXT, provider TEXT, provider_id TEXT, url TEXT, payload TEXT, PRIMARY KEY(investigation,provider,provider_id));
             CREATE TABLE IF NOT EXISTS coverage(investigation TEXT, provider TEXT, payload TEXT, PRIMARY KEY(investigation,provider));
             PRAGMA user_version=1;''')
-    def connect(self): return sqlite3.connect(self.path, timeout=30)
+    @contextmanager
+    def connect(self):
+        connection=sqlite3.connect(self.path,timeout=30)
+        try:
+            with connection: yield connection
+        finally: connection.close()
     def create(self, q):
         id = str(uuid.uuid4())
         with self.connect() as c: c.execute('INSERT INTO investigations VALUES(?,?,?)',(id,json.dumps(dataclasses.asdict(q)),now()))

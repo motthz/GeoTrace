@@ -1,6 +1,7 @@
 """Optional local processing. No model or footage is downloaded automatically."""
 import ipaddress
 import socket
+import re
 from pathlib import Path
 from urllib.parse import urlsplit
 import httpx
@@ -13,8 +14,10 @@ def public_url(url):
             raise ValueError('Download target must be a public address')
 
 def download(record,folder,max_bytes=100*1024*1024):
-    if not record.download_allowed or not record.download_url:
+    if record.download_allowed is not True or not record.download_url:
         raise PermissionError('Explicit provider download permission and asset URL required')
+    if not re.fullmatch(r'[A-Za-z0-9_-]+',record.id): raise ValueError('Unsafe local file identifier')
+    if max_bytes<=0: raise ValueError('Download byte limit must be positive')
     public_url(record.download_url)
     folder=Path(folder); folder.mkdir(parents=True,exist_ok=True)
     target=folder/(record.id+'.media'); part=target.with_suffix('.part')

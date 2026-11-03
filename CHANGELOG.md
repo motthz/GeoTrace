@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.3 — 2026-11-03
+
+Audit release. Fix archive reopening without original form parameters; geocoding/search handoff and overlapping coordinate lookups; cancellation before thread startup; early worker replacement; mutable result cells; stale details after empty searches. Fit startup window to the work area and make parameters scrollable. Keep forms and archive opening disabled during active searches. Display gallery timestamps in the selected timezone and sort timeline events by absolute time; tolerate malformed timestamps. Improve map dateline wrapping, MultiPolygon and NASA box footprints, click versus drag behavior and persistent offline legend.
+
+Validate equal time ranges, media types and IANA zones even for offset timestamps. Reject malformed API payloads and resumed searches with different parameters; honor HTTP-date Retry-After. Missing/invalid capture times remain UNKNOWN. Close SQLite connections deterministically and refuse unsupported newer schemas. Share the default archive between CLI and desktop.
+
+Generate readable linked PDF/HTML summaries, protect CSV formula-like text and include a SHA-256 export manifest; generate all artifacts before replacing previous reports. Validate local download identifiers. Add 63 regression tests and reproducible native Windows/UI and HTML/PDF rendering audit scripts. Prevent the build script from overwriting a running application.
+
 ## 0.1.2 — 2026-11-02
 
 Synchronize location labels and coordinates on field completion. Reverse geocoding preserves exact entered coordinates. Detect IANA timezone offline with tzfpy, with manual override for ambiguous boundaries. Reject stale lookup responses. Normalize local dates and preserve duration when changing the start; reject reversed intervals. Replace editable provider/media lists with checkboxes and validate compatible selection. Added regression tests for coordinate authority, timezone override, stale responses, date normalization and invalid-input recovery (19 tests total).

@@ -13,3 +13,4 @@ VALIDATION.md
 .env.*
 *.log
 dist-update/
+dist-*/

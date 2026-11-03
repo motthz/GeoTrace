@@ -11,6 +11,7 @@ import subprocess
 import sys
 import time
 import traceback
+import re
 
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT))
@@ -88,8 +89,15 @@ def main():
         assert data['records'],'Real providers returned no media; inspect coverage rather than fabricating a screenshot'
         record('Real native search persists public provider records',str(len(data['records']))+' records; '+json.dumps({k:v['status'] for k,v in data['coverage'].items()}))
         table=win.descendants(control_type='Table')[0];table.click_input(coords=(100,50));time.sleep(.2)
-        for index,name in enumerate(['Media gallery','Map (offline coordinates)','Timeline','Source coverage','Original metadata','Public search links']):
+        for index,name in enumerate(['Media gallery','Street map (OSM)','Map (offline coordinates)','Timeline','Source coverage','Original metadata','Public search links']):
             control(name,'TabItem').select();time.sleep(.35)
+            if name=='Street map (OSM)':
+                def settled():
+                    for text in win.descendants(control_type='Text'):
+                        value=text.window_text();match=re.search(r'Zoom \d+.*?(\d+)/(\d+)',value)
+                        if match and int(match[2])>0 and (match[1]==match[2] or 'non disponibili' in value):return True
+                    return False
+                wait_for(settled,35)
             screen('03-tab-'+str(index)+'-'+name.split()[0].lower())
             record('Native screen: '+name)
         control('Media gallery','TabItem').select()

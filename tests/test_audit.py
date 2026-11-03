@@ -89,6 +89,18 @@ def test_export_failure_does_not_replace_existing_report(tmp_path,monkeypatch):
     with pytest.raises(OSError):reports.export(a.load(id),folder)
     assert existing.read_text()=='original'
 
+def test_manifest_is_published_after_every_referenced_file(tmp_path,monkeypatch):
+    import geotrace.reports as reports
+    from pathlib import Path
+    a=Archive(tmp_path/'db');id=a.create(Query());published=[];replace=reports.os.replace
+    def track(source,destination):
+        if Path(source).name=='manifest.json':
+            metadata=json.loads(Path(source).read_text())
+            assert all((Path(destination).parent/name).exists() for name in metadata['files'])
+        published.append(Path(source).name);replace(source,destination)
+    monkeypatch.setattr(reports.os,'replace',track)
+    reports.export(a.load(id),tmp_path/'exports');assert published[-1]=='manifest.json'
+
 @pytest.mark.parametrize('stamp',[None,'invalid','2024-01-01T10:00:00'])
 def test_unconfirmed_time_does_not_get_metadata_confidence(stamp):
     from geotrace.providers import time_confidence

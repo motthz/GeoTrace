@@ -6,8 +6,9 @@ import json
 from datetime import datetime,timezone
 from email.utils import parsedate_to_datetime
 from .core import Record, distance
+from . import __version__
 
-USER_AGENT = 'GeoTrace/0.2 (https://github.com/motthz/GeoTrace)'
+USER_AGENT = f'GeoTrace/{__version__} (https://github.com/motthz/GeoTrace)'
 
 class ProviderBusy(RuntimeError): pass
 
@@ -81,7 +82,8 @@ class Nasa(Provider):
             for e in data.get('feed',{}).get('entry',[]):
                 url='https://search.earthdata.nasa.gov/search/granules?p='+e.get('collection_concept_id','')
                 url=next((l['href'] for l in e.get('links',[]) if l.get('rel','').endswith('/metadata#')),url)
-                out.append(Record(self.cap.name,e['id'],url,e.get('title') or e['id'],'satellite',e,recording=e.get('time_start'),modified=e.get('updated'),temporal_confidence=time_confidence(e.get('time_start')),geographic_confidence='APPROXIMATE_LOCATION',description='Earthdata granule footprint intersects bounding box; raw metadata preserves acquisition end.'))
+                thumbnail=next((l['href'] for l in e.get('links',[]) if l.get('rel','').endswith('/browse#') and isinstance(l.get('href'),str) and l['href'].startswith('https://')),None)
+                out.append(Record(self.cap.name,e['id'],url,e.get('title') or e['id'],'satellite',e,recording=e.get('time_start'),modified=e.get('updated'),temporal_confidence=time_confidence(e.get('time_start')),geographic_confidence='APPROXIMATE_LOCATION',description='Earthdata granule footprint intersects bounding box; raw metadata preserves acquisition end.',thumbnail=thumbnail))
         return out
 
 PROVIDERS=[

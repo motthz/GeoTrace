@@ -4,6 +4,8 @@ Python 3.11+ / PySide6 desktop, CPU only. No existing repository was supplied. C
 
 Architecture: `core.py` validated query/record dataclasses, spatial/time helpers, schema-v1 SQLite persistence; `providers.py` capabilities, public adapters and asynchronous coordinator; `app.py` Qt main thread with worker-owned asyncio loop; `reports.py` export; `media.py` optional local hashes and guarded downloads; `cli.py` headless retrieval.
 
+Visual components: images.py is the bounded asynchronous Qt Network loader/cache for source previews and OSM tiles; basemap.py is the native slippy-map UI. No WebEngine runtime is required by the desktop app. Cache bytes are presentation data, not archived evidence. Keep OSM attribution visible, request only visible tiles, and preserve normal TLS/host restrictions. See VISUALS.md for behavior and limits.
+
 Commands: `python -m pytest -q`; `python -m geotrace.app`; `python -m geotrace.cli --export private/reports`; `python -m PyInstaller --noconfirm --windowed --name GeoTrace --collect-data tzdata launch.py`.
 
 Audit: see AUDIT.md. Native Windows tools in tools/audit_desktop.py and tools/audit_geocoding.py launch isolated profiles under private/audit and drive the actual app with pywinauto. tools/audit_reports.py renders exported HTML and every PDF page. Do not run native audits concurrently: they use the same mouse/keyboard desktop. Keep real screenshots/records private. Unit tests use strictly separated fixtures. A source-edit during PyInstaller analysis can leave cached bytecode stale; finish edits before building and use --clean or verify embedded modules. Build in a staging dist directory while the user's application is open, then replace only after a clean close, preserving a backup.

@@ -67,5 +67,8 @@ def export(data,folder):
     # Generate everything before replacing any existing report files.
     with tempfile.TemporaryDirectory(prefix='.geotrace-export-',dir=folder.parent) as temporary:
         staging=Path(temporary); _write(data,staging)
-        for path in staging.iterdir(): os.replace(path,folder/path.name)
+        # Publish the completion/integrity marker only after every referenced file exists.
+        (folder/'manifest.json').unlink(missing_ok=True)
+        for path in sorted(staging.iterdir(),key=lambda p:(p.name=='manifest.json',p.name)):
+            os.replace(path,folder/path.name)
     return folder

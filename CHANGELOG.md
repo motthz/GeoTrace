@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.4 — 2026-11-03
+
+Add source thumbnails with visible-row loading, compact toggle, retry, author/license attribution and original links. Add a native OpenStreetMap tile view with current-cartography labeling, attribution, source points, catalog footprints, geodesic radius, zoom/pan/recenter and explicit polar/offline fallback. Add bounded asynchronous Qt Network retrieval, supported-host redirects, response size/image format checks, integrity-checked local cache and request cancellation for invisible queued work. Extract official NASA browse previews without changing full-asset download permissions. Fix first-show map centering. Publish export manifest only after all referenced files are in place. Extend regression coverage to 88 tests and native audit to seven tabs.
+
 ## 0.1.3 — 2026-11-03
 
 Audit release. Fix archive reopening without original form parameters; geocoding/search handoff and overlapping coordinate lookups; cancellation before thread startup; early worker replacement; mutable result cells; stale details after empty searches. Fit startup window to the work area and make parameters scrollable. Keep forms and archive opening disabled during active searches. Display gallery timestamps in the selected timezone and sort timeline events by absolute time; tolerate malformed timestamps. Improve map dateline wrapping, MultiPolygon and NASA box footprints, click versus drag behavior and persistent offline legend.

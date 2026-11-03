@@ -9,7 +9,7 @@ def test_ui_archive(tmp_path,monkeypatch):
     app=QApplication.instance() or QApplication([])
     w=Window(); id=w.archive.create(Query()); w.render(id)
     assert w.table.rowCount()==0
-    assert w.tabs.count()==6
+    assert w.tabs.count()==7
     w.close()
 
 def test_start_search_saves_and_displays_results(tmp_path,monkeypatch):
@@ -25,8 +25,9 @@ def test_start_search_saves_and_displays_results(tmp_path,monkeypatch):
     monkeypatch.setenv('LOCALAPPDATA',str(tmp_path))
     app=QApplication.instance() or QApplication([])
     w=Window(); w.begin()
-    deadline=time.monotonic()+5
-    while w.worker.isRunning() and time.monotonic()<deadline: QTest.qWait(20)
+    from PySide6.QtCore import QEventLoop,QTimer
+    loop=QEventLoop();w.worker.finished.connect(loop.quit);QTimer.singleShot(10000,loop.quit)
+    if w.worker.isRunning():loop.exec()
     app.processEvents()
     assert w.table.rowCount()==1
     assert w.start.isEnabled()
